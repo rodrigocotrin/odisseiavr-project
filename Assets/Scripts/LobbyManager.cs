@@ -1,7 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI; // Necessário para Button e RawImage
-using UnityEngine.SceneManagement;
+using UnityEngine.SceneManagement; // [MODIFICADO] Necessário para LoadSceneAsync
 using System.Collections.Generic;
+using System.Collections; // [NOVO] Necessário para Corrotinas (IEnumerator)
 using TMPro; // Necessário para TextMeshProUGUI
 
 // --- ESTRUTURA DE DADOS DE RUNTIME (ESPECÍFICA DO LOBBY) ---
@@ -57,7 +58,8 @@ public class LobbyManager : MonoBehaviour
     private List<LobbyDadosLocal> locais = new List<LobbyDadosLocal>();
     private int currentLocationIndex = 0;
     
-    // Não precisamos mais de 'mapDisplayImage' privada, pois ela é pública.
+    // [NOVO] Trava para impedir cliques duplos durante o carregamento
+    private bool isLoadingScene = false; 
 
     void Start()
     {
@@ -103,6 +105,8 @@ public class LobbyManager : MonoBehaviour
 
     /// <summary>
     /// Lê o JSON e popula a lista 'locais' com nomes e Texturas.
+    /// (Esta função pode permanecer síncrona, pois Texturas de UI
+    /// carregadas do Resources são geralmente pequenas).
     /// </summary>
     void LoadLobbyDataFromJSON()
     {
@@ -166,6 +170,9 @@ public class LobbyManager : MonoBehaviour
     /// </summary>
     public void NextLocation()
     {
+        // [MODIFICADO] Impede a troca se já estiver carregando
+        if (isLoadingScene) return; 
+        
         currentLocationIndex = (currentLocationIndex + 1) % locais.Count;
         UpdateUI();
     }
@@ -175,6 +182,9 @@ public class LobbyManager : MonoBehaviour
     /// </summary>
     public void PreviousLocation()
     {
+        // [MODIFICADO] Impede a troca se já estiver carregando
+        if (isLoadingScene) return; 
+
         currentLocationIndex--;
         if (currentLocationIndex < 0)
         {
@@ -185,8 +195,28 @@ public class LobbyManager : MonoBehaviour
 
     /// <summary>
     /// Chamado pelo 'mapStartButton'.
+    /// [MODIFICADO] Agora inicia uma Corrotina.
     /// </summary>
     public void StartTour()
+    {
+        // [MODIFICADO] Trava para impedir cliques duplos
+        if (isLoadingScene) return;
+        isLoadingScene = true;
+
+        // Desativa os botões para o usuário não clicar novamente
+        mapStartButton.interactable = false;
+        nextButton.interactable = false;
+        previousButton.interactable = false;
+        
+        // Inicia a rotina de carregamento assíncrono
+        StartCoroutine(LoadTourSceneAsync());
+    }
+
+    /// <summary>
+    /// [NOVA CORROTINA]
+    /// Carrega a cena do Tour de forma assíncrona para não travar a thread principal.
+    /// </summary>
+    private IEnumerator LoadTourSceneAsync()
     {
         // Usa o GameSettings (Singleton) para passar o índice para a próxima cena
         GameSettings settings = GameSettings.Instance;
@@ -198,6 +228,19 @@ public class LobbyManager : MonoBehaviour
         }
 
         settings.selectedLocationIndex = currentLocationIndex;
-        SceneManager.LoadScene(tourSceneName);
+        
+        // 1. Inicia o carregamento assíncrono
+        AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(tourSceneName);
+
+        // 2. Espera até que o carregamento da cena esteja completo
+        //    (A tela ficará preta durante essa transição, o que é normal)
+        while (!asyncLoad.isDone)
+        {
+            // (Opcional: você poderia exibir o asyncLoad.progress em uma UI de loading)
+            yield return null; // Espera pelo próximo frame
+        }
+        
+        // O 'isLoadingScene' não precisa ser resetado para 'false',
+        // pois este objeto será destruído (ou a cena será descarregada).
     }
 }

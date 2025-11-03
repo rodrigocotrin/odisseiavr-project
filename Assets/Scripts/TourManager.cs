@@ -4,6 +4,13 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro; // Necessário para TextMeshProUGUI
 
+// [NOVO] Necessário para carregar a cena do Lobby
+using UnityEngine.SceneManagement; 
+
+// [IMPORTANTE] Adiciona a namespace do XR Interaction Toolkit
+// Garanta que o pacote 'XR Interaction Toolkit' esteja instalado no seu projeto.
+using UnityEngine.XR.Interaction.Toolkit; 
+
 // --- ESTRUTURAS DE DADOS PARA O RUNTIME (O QUE O JOGO USA) ---
 
 /// <summary>
@@ -80,6 +87,12 @@ public class TourManager : MonoBehaviour
     [Tooltip("Uma imagem preta (Image UI) que cobre a tela para o efeito de fade.")]
     public Image fadeScreen;
 
+    // --- [NOVO CAMPO] ---
+    [Header("Configurações de Cena")]
+    [Tooltip("O nome exato da sua cena do Lobby (ex: 'LobbyScene').")]
+    public string lobbySceneName = "LobbyScene";
+    // --------------------
+
     [Header("Configurações de Feedback")]
     [Tooltip("Cor que o botão de resposta assume ao acertar.")]
     public Color correctColor = new Color(0.1f, 0.7f, 0.2f);
@@ -117,6 +130,7 @@ public class TourManager : MonoBehaviour
 
     /// <summary>
     /// Chamado quando o script é inicializado.
+    /// Agora também desativa o movimento do jogador.
     /// </summary>
     void Start()
     {
@@ -129,16 +143,20 @@ public class TourManager : MonoBehaviour
              return;
         }
         
-        // Garante que o fade comece transparente se a cena for iniciada diretamente
+        // Garante que a tela comece PRETA.
         Color tempColor = fadeScreen.color;
-        tempColor.a = 0;
+        tempColor.a = 1.0f; // Começa 100% opaco (preto)
         fadeScreen.color = tempColor;
-        fadeScreen.gameObject.SetActive(false); // Começa desativado para não bloquear raios
-
-        // 1. Carrega todos os dados do JSON para a memória
-        LoadTourDataFromJSON();
-
-        // 2. Configura os botões de resposta
+        fadeScreen.gameObject.SetActive(true); // Começa ATIVADO para cobrir o carregamento
+        
+        // --- [AÇÃO DE SEGURANÇA] ---
+        // Desativa programaticamente os componentes de input de movimento.
+        // Isso garante que o movimento não ocorra, mesmo que o Character Controller
+        // seja reativado acidentalmente.
+        DisablePlayerMovement();
+        // -------------------------
+        
+        // 1. Configura os botões de resposta
         for (int i = 0; i < answerButtons.Count; i++)
         {
             int index = i; // "Captura" o índice para o delegate (lambda)
@@ -147,26 +165,68 @@ public class TourManager : MonoBehaviour
             }
         }
 
-        // 3. LÓGICA DE INTEGRAÇÃO COM O LOBBY (GameSettings)
-        // Procura pela instância do GameSettings que veio da cena do Lobby.
+        // 2. LÓGICA DE INTEGRAÇÃO COM O LOBBY (GameSettings)
         GameSettings settings = GameSettings.Instance;
         if (settings != null)
         {
-            // Se encontrou, usa o índice que o Lobby salvou.
             currentLocalIndex = settings.selectedLocationIndex;
-            
-            // Destruímos o GameSettings, pois ele já cumpriu seu papel.
             Destroy(settings.gameObject);
         }
         else
         {
-            // Fallback: Se o GameSettings não existir (ex: iniciamos direto
-            // da cena do Tour para testes), apenas começa do índice 0.
             currentLocalIndex = 0;
             Debug.LogWarning("GameSettings não encontrado. Iniciando do local padrão (Índice 0).");
         }
 
-        // 4. Inicia o primeiro tour
+        // 3. Inicia a "Master Coroutine" que fará o carregamento
+        //    assíncrono dos assets e depois iniciará o tour.
+        StartCoroutine(InitializeTour());
+    }
+
+    /// <summary>
+    /// [FUNÇÃO DE SEGURANÇA]
+    /// Encontra e desativa componentes de movimento (como Continuous Move ou Teleport)
+    /// no XR Origin para garantir que a experiência seja estacionária.
+    /// </summary>
+    void DisablePlayerMovement()
+    {
+        // Tenta encontrar o componente base de movimento contínuo (analógico)
+        var moveProvider = FindObjectOfType<UnityEngine.XR.Interaction.Toolkit.ContinuousMoveProviderBase>();
+        if (moveProvider != null)
+        {
+            moveProvider.enabled = false;
+            Debug.Log("ContinuousMoveProviderBase desativado para a cena do Tour.");
+        }
+        else
+        {
+            Debug.LogWarning("Nenhum 'ContinuousMoveProviderBase' encontrado para desativar.");
+        }
+
+        // Por segurança, desativa também o teleporte, caso exista
+        var teleportProvider = FindObjectOfType<UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationProvider>();
+        if (teleportProvider != null)
+        {
+            teleportProvider.enabled = false;
+            Debug.Log("TeleportationProvider desativado para a cena do Tour.");
+        }
+        else
+        {
+            Debug.LogWarning("Nenhum 'TeleportationProvider' encontrado para desativar.");
+        }
+    }
+
+
+    /// <summary>
+    /// [CORROTINA]
+    /// Orquestra a inicialização: primeiro carrega os dados (async)
+    /// e depois inicia a transição do primeiro local (async).
+    /// </summary>
+    private IEnumerator InitializeTour()
+    {
+        // 1. Espera o carregamento de todos os assets do JSON terminar.
+        yield return StartCoroutine(LoadTourDataFromJSONAsync());
+        
+        // 2. Agora que tudo está na memória, inicia o primeiro tour.
         if (locais.Count > 0)
         {
             // O 'true' (isFirstLoad) garante que ele faça o Fade-IN inicial
@@ -176,23 +236,27 @@ public class TourManager : MonoBehaviour
         else
         {
             Debug.LogError("Nenhum local foi carregado do JSON. Verifique o arquivo.");
+            // Se falhar, pelo menos remove a tela preta
+            yield return StartCoroutine(FadeIn()); 
         }
     }
 
     /// <summary>
+    /// [CORROTINA] Usa Resources.LoadAsync.
+    /// 
     /// Lê o arquivo JSON, converte os dados para as estruturas de runtime
-    /// e carrega os assets (Materiais e Áudios) da pasta 'Resources'.
+    /// e carrega os assets (Materiais e Áudios) da pasta 'Resources' ASSINCRONAMENTE.
     /// </summary>
-    void LoadTourDataFromJSON()
+    IEnumerator LoadTourDataFromJSONAsync()
     {
         if (tourDataJson == null)
         {
             Debug.LogError("ERRO CRÍTICO: O arquivo 'tourDataJson' não foi atribuído no Inspector!");
             enabled = false;
-            return;
+            yield break; // Para a corrotina
         }
 
-        // Desserializa o texto do JSON para nossas classes C#
+        // Desserializa o texto do JSON (isso é rápido)
         TourDataJson dataFromJson = JsonUtility.FromJson<TourDataJson>(tourDataJson.text);
 
         // Limpa a lista de locais em runtime antes de preenchê-la
@@ -204,34 +268,56 @@ public class TourManager : MonoBehaviour
             DadosLocal novoLocal = new DadosLocal
             {
                 locationName = localJson.locationName,
-                // Carrega o AudioClip da pasta Resources usando o caminho do JSON
-                backgroundMusic = Resources.Load<AudioClip>(localJson.backgroundMusicPath),
                 desafios = new List<Desafio>()
             };
+            
+            // --- Carregamento Assíncrono do Áudio ---
+            if (!string.IsNullOrEmpty(localJson.backgroundMusicPath))
+            {
+                ResourceRequest audioRequest = Resources.LoadAsync<AudioClip>(localJson.backgroundMusicPath);
+                yield return audioRequest; // Espera o carregamento terminar
 
+                if (audioRequest.asset != null)
+                {
+                    novoLocal.backgroundMusic = audioRequest.asset as AudioClip;
+                }
+                else
+                {
+                    Debug.LogWarning($"Asset de Áudio não encontrado em 'Resources/{localJson.backgroundMusicPath}' para o local '{novoLocal.locationName}'");
+                }
+            }
+            
             // Itera por cada "desafio" dentro do local
             foreach(var desafioJson in localJson.desafios)
             {
                 Desafio novoDesafio = new Desafio
                 {
-                    // Carrega o Material da pasta Resources usando o caminho do JSON
-                    panoramaMaterial = Resources.Load<Material>(desafioJson.panoramaMaterialPath),
+                    // Dados rápidos (não precisam de load)
                     initialYRotation = desafioJson.initialYRotation, 
                     questionText = desafioJson.questionText,
                     answers = desafioJson.answers,
                     correctAnswerIndex = desafioJson.correctAnswerIndex
                 };
+                
+                // --- Carregamento Assíncrono do Material ---
+                if (!string.IsNullOrEmpty(desafioJson.panoramaMaterialPath))
+                {
+                    ResourceRequest materialRequest = Resources.LoadAsync<Material>(desafioJson.panoramaMaterialPath);
+                    yield return materialRequest; // Espera o carregamento terminar
+
+                    if (materialRequest.asset != null)
+                    {
+                        novoDesafio.panoramaMaterial = materialRequest.asset as Material;
+                    }
+                    else
+                    {
+                         Debug.LogWarning($"Asset de Material não encontrado em 'Resources/{desafioJson.panoramaMaterialPath}' para o local '{novoLocal.locationName}'");
+                    }
+                }
+                
                 novoLocal.desafios.Add(novoDesafio);
-
-                // Aviso se o material não for encontrado
-                if (novoDesafio.panoramaMaterial == null) 
-                    Debug.LogWarning($"Asset de Material não encontrado em 'Resources/{desafioJson.panoramaMaterialPath}' para o local '{novoLocal.locationName}'");
             }
-
-            // Aviso se a música não for encontrada
-            if (novoLocal.backgroundMusic == null && !string.IsNullOrEmpty(localJson.backgroundMusicPath)) 
-                Debug.LogWarning($"Asset de Áudio não encontrado em 'Resources/{localJson.backgroundMusicPath}' para o local '{novoLocal.locationName}'");
-
+            
             locais.Add(novoLocal);
         }
     }
@@ -281,38 +367,34 @@ public class TourManager : MonoBehaviour
         
         Desafio desafioAtual = locais[currentLocalIndex].desafios[currentDesafioIndex];
 
-        // Aplica a rotação inicial Y ao objeto da esfera (e não ao XR Origin)
+        if (desafioAtual.panoramaMaterial == null)
+        {
+            Debug.LogError($"Material nulo para o desafio {currentDesafioIndex} do local {locais[currentLocalIndex].locationName}. Verifique o caminho no JSON e se o asset existe em Resources.");
+        }
+        
         panoramaSphereRenderer.transform.rotation = Quaternion.Euler(0, desafioAtual.initialYRotation, 0);
-        
-        // Define o material (imagem 360°) da esfera.
         panoramaSphereRenderer.material = desafioAtual.panoramaMaterial;
-        
-        // Atualiza a UI do quiz.
         questionTextUI.text = desafioAtual.questionText;
 
         // Configura os botões de resposta
         for (int i = 0; i < answerButtons.Count; i++)
         {
-            // Verifica se existe uma resposta para este botão
             if (i < desafioAtual.answers.Count)
             {
                 answerButtons[i].gameObject.SetActive(true); // Ativa o botão
                 answerButtons[i].GetComponent<Image>().color = normalColor; // Reseta a cor
                 answerButtons[i].interactable = true; // Torna o botão clicável
                 
-                // Pega o componente TextMeshProUGUI dentro do botão
                 var tmproText = answerButtons[i].GetComponentInChildren<TextMeshProUGUI>();
                 if (tmproText != null)
                     tmproText.text = desafioAtual.answers[i]; // Define o texto da resposta
             }
             else
             {
-                // Se não há resposta (ex: quiz com 2 opções), desativa os botões extras.
                 answerButtons[i].gameObject.SetActive(false);
             }
         }
         
-        // Libera a trava para permitir que o usuário responda.
         isAnswering = false;
     }
 
@@ -321,18 +403,16 @@ public class TourManager : MonoBehaviour
     /// </summary>
     public void CheckAnswer(int selectedIndex)
     {
-        // Se já estamos processando uma resposta, ignora novos cliques.
         if (isAnswering) return; 
         isAnswering = true; // Ativa a trava
 
         Desafio desafioAtual = locais[currentLocalIndex].desafios[currentDesafioIndex];
         
-        // Desativa todos os botões para evitar cliques durante o feedback
         for(int i = 0; i < desafioAtual.answers.Count; i++) {
-             answerButtons[i].interactable = false;
+             if (answerButtons[i] != null) 
+                answerButtons[i].interactable = false;
         }
 
-        // Verifica se a resposta está correta
         if (selectedIndex == desafioAtual.correctAnswerIndex)
         {
             StartCoroutine(HandleCorrectAnswer(answerButtons[selectedIndex]));
@@ -352,7 +432,6 @@ public class TourManager : MonoBehaviour
         Color currentColor = Color.black; // Começa como preto
         float startAlpha = 0f;
         
-        // Se a tela já estiver parcialmente visível, começa do alfa atual
         if(fadeScreen.gameObject.activeInHierarchy) {
             startAlpha = fadeScreen.color.a;
         }
@@ -403,18 +482,17 @@ public class TourManager : MonoBehaviour
     /// <summary>
     /// Gerencia a transição completa entre locais, usando os efeitos de fade.
     /// </summary>
-    /// <param name="localIndex">O índice do próximo local a ser carregado.</param>
-    /// <param name="isFirstLoad">Indica se este é o primeiro carregamento (vindo do Lobby).</param>
     private IEnumerator TransitionToLocal(int localIndex, bool isFirstLoad = false) {
         
         if (isFirstLoad)
         {
-             // Se é o primeiro load, a cena acabou de carregar (vinda do Lobby).
-             // A tela deve estar preta. Apenas garantimos isso.
+             // Se é o primeiro load, a tela JÁ DEVE ESTAR preta.
              Color tempColor = Color.black;
              tempColor.a = 1;
              fadeScreen.color = tempColor;
              fadeScreen.gameObject.SetActive(true);
+             
+             yield return new WaitForSeconds(0.2f);
         }
         else
         {
@@ -422,11 +500,9 @@ public class TourManager : MonoBehaviour
             yield return StartCoroutine(FadeOut());
             audioSource.Stop(); // Para a música do local anterior
             
-            // Toca o som de vitória/transição
             if (locationVictorySound != null) 
                 audioSource.PlayOneShot(locationVictorySound, sfxVolume);
                 
-            // Espera um pouco na tela preta
             yield return new WaitForSeconds(waitOnBlackScreenDelay);
         }
 
@@ -439,6 +515,7 @@ public class TourManager : MonoBehaviour
 
     /// <summary>
     /// Lógica para quando o usuário acerta a resposta.
+    /// [MODIFICADO] Agora verifica se é o último local.
     /// </summary>
     private IEnumerator HandleCorrectAnswer(Button correctButton)
     {
@@ -446,7 +523,6 @@ public class TourManager : MonoBehaviour
         correctButton.GetComponent<Image>().color = correctColor;
         if(correctAnswerSound != null) audioSource.PlayOneShot(correctAnswerSound, sfxVolume); 
         
-        // Espera o tempo de feedback
         yield return new WaitForSeconds(feedbackDelay);
 
         // Avança para o próximo desafio
@@ -455,21 +531,32 @@ public class TourManager : MonoBehaviour
         // Verifica se completou todos os desafios do local atual.
         if (currentDesafioIndex >= locais[currentLocalIndex].desafios.Count)
         {
-            // Sim, completou. Vamos para o próximo local.
-            // O operador '%' (módulo) faz o loop (ex: do 2 volta pro 0)
-            int proximoLocalIndex = (currentLocalIndex + 1) % locais.Count;
+            // --- [LÓGICA DE FIM DE TOUR MODIFICADA] ---
             
-            // Chama a transição (passando 'false' pois não é o primeiro load)
-            yield return StartCoroutine(TransitionToLocal(proximoLocalIndex, false)); 
+            // Verifica se o local ATUAL (que acabou de terminar)
+            // é o último local da lista.
+            if (currentLocalIndex >= locais.Count - 1)
+            {
+                // SIM, este era o último local.
+                // Inicia a rotina de retorno ao Lobby.
+                yield return StartCoroutine(ReturnToLobby());
+            }
+            else
+            {
+                // NÃO, ainda há locais. Vamos para o próximo.
+                // (Note: Não usamos mais o '%' (módulo) para evitar o loop)
+                int proximoLocalIndex = currentLocalIndex + 1;
+                
+                // Chama a transição normal
+                yield return StartCoroutine(TransitionToLocal(proximoLocalIndex, false)); 
+            }
+            // ---------------------------------------------
         }
         else
         {
             // Não, ainda há desafios. Apenas apresenta o próximo.
             ApresentarDesafio();
         }
-        
-        // Nota: 'isAnswering' só é definido como 'false' dentro de ApresentarDesafio()
-        // ou após o FadeIn em TransitionToLocal (indiretamente por ApresentarDesafio).
     }
 
     /// <summary>
@@ -481,7 +568,6 @@ public class TourManager : MonoBehaviour
         incorrectButton.GetComponent<Image>().color = incorrectColor;
         if(incorrectAnswerSound != null) audioSource.PlayOneShot(incorrectAnswerSound, sfxVolume);
         
-        // Espera o tempo de feedback
         yield return new WaitForSeconds(feedbackDelay);
         
         // Reseta as cores e reabilita os botões para uma nova tentativa.
@@ -495,5 +581,36 @@ public class TourManager : MonoBehaviour
         
         // Libera a trava para o usuário tentar novamente.
         isAnswering = false;
+    }
+    
+    /// <summary>
+    /// [NOVA CORROTINA]
+    /// Executa o fade out final e carrega a cena do Lobby.
+    /// </summary>
+    private IEnumerator ReturnToLobby()
+    {
+        // 1. Escurece a tela
+        yield return StartCoroutine(FadeOut());
+        audioSource.Stop(); // Para a música do local anterior
+        
+        // 2. Toca o som de vitória final (pode ser o mesmo som de transição)
+        if (locationVictorySound != null) 
+            audioSource.PlayOneShot(locationVictorySound, sfxVolume);
+            
+        // 3. Espera um pouco na tela preta
+        yield return new WaitForSeconds(waitOnBlackScreenDelay);
+
+        // 4. Carrega a cena do Lobby de forma assíncrona
+        if (string.IsNullOrEmpty(lobbySceneName))
+        {
+            Debug.LogError("O 'lobbySceneName' não foi definido no Inspector do TourManager! Não é possível voltar ao lobby.");
+            yield break;
+        }
+        
+        AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(lobbySceneName);
+        while (!asyncLoad.isDone)
+        {
+            yield return null; // Espera o carregamento
+        }
     }
 }

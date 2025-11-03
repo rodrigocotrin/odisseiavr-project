@@ -188,7 +188,7 @@ Canvas:
   m_Enabled: 1
   serializedVersion: 3
   m_RenderMode: 2
-  m_Camera: {fileID: 1749307361}
+  m_Camera: {fileID: 0}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
@@ -515,25 +515,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
---- !u!1 &348363010 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7888906884245791980, guid: df35ebdbb30f1694883181110de543c6, type: 3}
-  m_PrefabInstance: {fileID: 1749307360}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &348363017
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 348363010}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 83e4e6cca11330d4088d729ab4fc9d9f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.XRInteractionManager
-  m_StartingHoverFilters: []
-  m_StartingSelectFilters: []
 --- !u!1 &507964894
 GameObject:
   m_ObjectHideFlags: 0
@@ -670,6 +651,52 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 507964894}
   m_CullTransparentMesh: 1
+--- !u!1 &609343875
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 609343877}
+  - component: {fileID: 609343876}
+  m_Layer: 0
+  m_Name: XR Interaction Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &609343876
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 609343875}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83e4e6cca11330d4088d729ab4fc9d9f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_StartingHoverFilters: []
+  m_StartingSelectFilters: []
+--- !u!4 &609343877
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 609343875}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &651996199
 GameObject:
   m_ObjectHideFlags: 0
@@ -823,7 +850,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6803edce0201f574f923fd9d10e5b30a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor
-  m_InteractionManager: {fileID: 0}
+  m_InteractionManager: {fileID: 609343876}
   m_InteractionLayers:
     m_Bits: 4294967295
   m_Handedness: 0
@@ -945,7 +972,7 @@ MonoBehaviour:
   m_AllowHoverHapticsWhileSelecting: 1
   m_LineType: 0
   m_BlendVisualLinePoints: 1
-  m_MaxRaycastDistance: 100
+  m_MaxRaycastDistance: 250
   m_RayOriginTransform: {fileID: 0}
   m_ReferenceFrame: {fileID: 0}
   m_Velocity: 16
@@ -2114,7 +2141,7 @@ Canvas:
   m_Enabled: 1
   serializedVersion: 3
   m_RenderMode: 2
-  m_Camera: {fileID: 1749307361}
+  m_Camera: {fileID: 0}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
@@ -2291,9 +2318,6 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 7888906884245791980, guid: df35ebdbb30f1694883181110de543c6, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 348363017}
     - targetCorrespondingSourceObject: {fileID: 8839547448173796814, guid: df35ebdbb30f1694883181110de543c6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1803312309}
@@ -2301,11 +2325,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 916177028}
   m_SourcePrefab: {fileID: 100100000, guid: df35ebdbb30f1694883181110de543c6, type: 3}
---- !u!20 &1749307361 stripped
-Camera:
-  m_CorrespondingSourceObject: {fileID: 8839547446482107830, guid: df35ebdbb30f1694883181110de543c6, type: 3}
-  m_PrefabInstance: {fileID: 1749307360}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1803312303 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8839547448173796814, guid: df35ebdbb30f1694883181110de543c6, type: 3}
@@ -2839,7 +2858,7 @@ Canvas:
   m_Enabled: 1
   serializedVersion: 3
   m_RenderMode: 2
-  m_Camera: {fileID: 1749307361}
+  m_Camera: {fileID: 0}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
@@ -3228,7 +3247,7 @@ Canvas:
   m_Enabled: 1
   serializedVersion: 3
   m_RenderMode: 2
-  m_Camera: {fileID: 1749307361}
+  m_Camera: {fileID: 0}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
@@ -3272,6 +3291,7 @@ SceneRoots:
   - {fileID: 189687708}
   - {fileID: 2089715638}
   - {fileID: 1443677744}
+  - {fileID: 609343877}
   - {fileID: 1749307360}
   - {fileID: 2135779986}
   - {fileID: 2003008576}

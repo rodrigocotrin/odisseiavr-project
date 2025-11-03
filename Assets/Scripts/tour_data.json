@@ -188,7 +188,7 @@
     },
     {
       "locationName": "Galeria da Academia, Florença",
-      "backgroundMusicPath": "Audio/trilhasonora_florenca",
+      "backgroundMusicPath": "Audio/trilhasonora_museus",
       "mapImagePath": "UI/Mapas/mapa_florenca",
       "desafios": [
         {
@@ -250,7 +250,7 @@
     },
     {
       "locationName": "Museu do Ipiranga, Brasil",
-      "backgroundMusicPath": "Audio/trilhasonora_ipiranga",
+      "backgroundMusicPath": "Audio/trilhasonora_museus",
       "mapImagePath": "UI/Mapas/mapa_ipiranga",
       "desafios": [
         {
@@ -312,7 +312,7 @@
     },
     {
       "locationName": "Museu do Louvre, França",
-      "backgroundMusicPath": "Audio/trilhasonora_louvre",
+      "backgroundMusicPath": "Audio/trilhasonora_museus",
       "mapImagePath": "UI/Mapas/mapa_louvre",
       "desafios": [
         {
