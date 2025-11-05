@@ -207,20 +207,20 @@
           "initialYRotation": 0,
           "questionText": "Qual o objetivo original da Galeria, fundada no século XVIII?",
           "answers": [
-            "Abrigar a família Medici",
-            "Servir de centro de ensino para estudantes de arte",
-            "Ser uma catedral municipal"
+            "Abrigo",
+            "Centro de ensino",
+            "Catedral municipal"
           ],
           "correctAnswerIndex": 1
         },
         {
           "panoramaMaterialPath": "Materials/MuseuFlorenca/MuseuFlorenca03",
           "initialYRotation": 0,
-          "questionText": "Qual peculiaridade da obra os \"Prisioneiros\"?",
+          "questionText": "Florença é precurssora de qual período da arte?",
           "answers": [
-            "2 modificações",
-            "Incompletas",
-            "Cópias em gesso"
+            "Barroco",
+            "Renascimento",
+            "Romantismo"
           ],
           "correctAnswerIndex": 1
         },
@@ -256,13 +256,13 @@
         {
           "panoramaMaterialPath": "Materials/MuseuIpiranga/MuseuIpiranga01",
           "initialYRotation": 0,
-          "questionText": "O que o edifício-monumento do Museu do Ipiranga celebra?",
+          "questionText": "Qual o nome oficial do museu?",
           "answers": [
-            "Proclamação da República",
-            "Independência do Brasil",
-            "A Vinda da Família Real"
+            "Museu Paulista",
+            "Museu da Independência",
+            "Museu do Ipiranga"
           ],
-          "correctAnswerIndex": 1
+          "correctAnswerIndex": 0
         },
         {
           "panoramaMaterialPath": "Materials/MuseuIpiranga/MuseuIpiranga02",
@@ -289,13 +289,13 @@
         {
           "panoramaMaterialPath": "Materials/MuseuIpiranga/MuseuIpiranga04",
           "initialYRotation": 0,
-          "questionText": "Qual é o foco do Museu em relação às narrativas históricas?",
+          "questionText": "Qual é a obra de arte mais famosa do Museu do Ipiranga?",
           "answers": [
-            "Focar apenas na elite",
-            "Incluir populações silenciadas",
-            "Focar apenas na natureza"
+            "Independência ou Morte",
+            "Abaporu",
+            "A Redenção de Cam"
           ],
-          "correctAnswerIndex": 1
+          "correctAnswerIndex": 0
         },
         {
           "panoramaMaterialPath": "Materials/MuseuIpiranga/MuseuIpiranga05",
@@ -332,7 +332,7 @@
           "questionText": "Qual é a obra de arte mais famosa do Louvre?",
           "answers": [
             "Vênus de Milo",
-            "A Liberdade Guia o Povo",
+            "Morte da Virgem",
             "Mona Lisa"
           ],
           "correctAnswerIndex": 2
@@ -355,7 +355,7 @@
           "answers": [
             "Renascimento",
             "Grécia Antiga",
-            "Arte Contemporânea"
+            "Arte Medieval"
           ],
           "correctAnswerIndex": 1
         },
