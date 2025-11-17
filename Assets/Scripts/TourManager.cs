@@ -71,11 +71,10 @@ public class TourManager : MonoBehaviour
         if (dataManager == null) dataManager = GetComponent<TourDataManager>();
         if (uiManager == null) uiManager = GetComponent<TourUIManager>();
 
-        // [PASSO 1] Inscreve-se no evento do UIManager.
-        // Quando um botão for clicado, o UIManager irá "avisar"
-        // o TourManager, chamando a função CheckAnswer.
+        // [PASSO 1] Inscreve-se nos eventos do UIManager.
         uiManager.OnAnswerButtonClicked += CheckAnswer;
-        
+        uiManager.OnMenuButtonClicked += HandleMenuButtonClick;
+
         // [PASSO 2] Desativa o movimento do jogador.
         DisablePlayerMovement();
         
@@ -219,7 +218,7 @@ public class TourManager : MonoBehaviour
         if (isAnswering) return; 
         isAnswering = true; // Ativa a trava
 
-        // Manda o UIManager desativar os botões
+        // Manda o UIManager desativar os botões (respostas + menu)
         uiManager.SetAllButtonsInteractable(false, desafioAtual.answers.Count);
 
         // A lógica de verificação
@@ -231,6 +230,25 @@ public class TourManager : MonoBehaviour
         {
             StartCoroutine(HandleIncorrectAnswer(selectedIndex));
         }
+    }
+
+    /// <summary>
+    /// [NOVO MÉTODO]
+    /// Chamado pelo evento 'OnMenuButtonClicked' do UIManager.
+    /// Inicia o processo de retorno ao Lobby.
+    /// </summary>
+    public void HandleMenuButtonClick()
+    {
+        // Usa a mesma trava de 'CheckAnswer' para evitar cliques duplos
+        if (isAnswering) return; 
+        isAnswering = true; // Ativa a trava
+
+        // Manda o UIManager desativar todos os botões (incluindo o de menu)
+        int answerCount = (desafioAtual != null) ? desafioAtual.answers.Count : uiManager.answerButtons.Count;
+        uiManager.SetAllButtonsInteractable(false, answerCount);
+
+        // Inicia a corrotina para voltar ao Lobby
+        StartCoroutine(ReturnToLobby());
     }
     
     // --- CORROTINAS DE EFEITOS E TRANSIÇÕES ---
@@ -265,6 +283,7 @@ public class TourManager : MonoBehaviour
 
     /// <summary>
     /// Lógica para quando o usuário acerta a resposta.
+    /// [MODIFICADO]
     /// </summary>
     private IEnumerator HandleCorrectAnswer(int correctButtonIndex)
     {
@@ -285,24 +304,37 @@ public class TourManager : MonoBehaviour
             if (currentLocalIndex >= locais.Count - 1)
             {
                 // SIM, era o último. Retorna ao Lobby.
+                // Esta corrotina JÁ TEM seu próprio fade.
                 yield return StartCoroutine(ReturnToLobby());
             }
             else
             {
                 // NÃO, ainda há locais. Vai para o próximo.
+                // Esta corrotina JÁ TEM seu próprio fade.
                 int proximoLocalIndex = currentLocalIndex + 1;
                 yield return StartCoroutine(TransitionToLocal(proximoLocalIndex, false)); 
             }
         }
         else
         {
-            // Não, ainda há desafios. Apenas apresenta o próximo.
+            // [MODIFICADO] Adicionamos FadeOut/FadeIn entre os desafios
+            
+            // 1. Escurece a tela
+            yield return StartCoroutine(uiManager.FadeOut(fadeDuration));
+
+            // 2. Apresenta o próximo desafio (enquanto a tela está preta)
             ApresentarDesafio();
+            
+            // 3. Clareia a tela com o novo conteúdo
+            yield return StartCoroutine(uiManager.FadeIn(fadeDuration));
+            
+            // O 'isAnswering = false' já é chamado dentro do ApresentarDesafio()
         }
     }
 
     /// <summary>
     /// Lógica para quando o usuário erra a resposta.
+    /// [MODIFICADO]
     /// </summary>
     private IEnumerator HandleIncorrectAnswer(int incorrectButtonIndex)
     {
@@ -312,10 +344,18 @@ public class TourManager : MonoBehaviour
         
         yield return new WaitForSeconds(feedbackDelay);
         
-        // Manda o UIManager resetar os botões para a nova tentativa
+        // [MODIFICADO] Adicionamos FadeOut/FadeIn para o "retry"
+        
+        // 1. Escurece a tela
+        yield return StartCoroutine(uiManager.FadeOut(fadeDuration));
+
+        // 2. Manda o UIManager resetar os botões (enquanto a tela está preta)
         uiManager.ResetButtonsToNormal(desafioAtual.answers.Count);
         
-        // Libera a trava
+        // 3. Clareia a tela para a nova tentativa
+        yield return StartCoroutine(uiManager.FadeIn(fadeDuration));
+
+        // 4. Libera a trava (agora que tudo está visível novamente)
         isAnswering = false;
     }
     

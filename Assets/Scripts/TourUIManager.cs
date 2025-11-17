@@ -17,6 +17,10 @@ public class TourUIManager : MonoBehaviour
     [Tooltip("A lista de botões que servirão como opções de resposta.")]
     public List<Button> answerButtons;
     
+    // [NOVO] Referência para o botão de Menu
+    [Tooltip("Botão para retornar ao Lobby (Menu).")]
+    public Button menuButton; 
+    
     // --- LÓGICA DE FADE OPCIONAL ---
     [Tooltip("Uma imagem preta (Image UI) para o fade. (OPCIONAL)")]
     public Image fadeScreen;
@@ -29,8 +33,11 @@ public class TourUIManager : MonoBehaviour
     [Tooltip("Cor padrão dos botões de resposta.")]
     public Color normalColor = Color.white;
 
-    // Evento para notificar o TourManager quando um botão for clicado
+    // Evento para notificar o TourManager quando um botão de RESPOSTA for clicado
     public event System.Action<int> OnAnswerButtonClicked;
+    
+    // [NOVO] Evento para notificar o TourManager quando o botão de MENU for clicado
+    public event System.Action OnMenuButtonClicked;
 
     // Propriedade pública para o TourManager saber se pode pausar no fade
     public bool HasFadeScreen => fadeScreen != null;
@@ -57,11 +64,12 @@ public class TourUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Adiciona os listeners aos botões de resposta.
-    /// Quando clicados, eles disparam o evento 'OnAnswerButtonClicked'.
+    /// Adiciona os listeners aos botões de resposta e ao botão de menu.
+    /// [MODIFICADO]
     /// </summary>
     private void InitializeButtonListeners()
     {
+        // Listeners dos botões de resposta
         for (int i = 0; i < answerButtons.Count; i++)
         {
             int index = i; // "Captura" o índice para o delegate (lambda)
@@ -70,15 +78,27 @@ public class TourUIManager : MonoBehaviour
                 answerButtons[i].onClick.AddListener(() => OnAnswerButtonClicked?.Invoke(index));
             }
         }
+        
+        // [NOVO] Listener do botão de menu
+        if (menuButton != null)
+        {
+            menuButton.onClick.AddListener(() => OnMenuButtonClicked?.Invoke());
+        }
+        else
+        {
+            Debug.LogWarning("O 'menuButton' não foi atribuído no TourUIManager.");
+        }
     }
 
     /// <summary>
     /// Atualiza a UI do quiz com os dados de um novo desafio.
+    /// [MODIFICADO]
     /// </summary>
     public void ApresentarDesafio(Desafio desafio)
     {
         questionTextUI.text = desafio.questionText;
 
+        // Atualiza os botões de resposta
         for (int i = 0; i < answerButtons.Count; i++)
         {
             if (i < desafio.answers.Count)
@@ -96,22 +116,36 @@ public class TourUIManager : MonoBehaviour
                 answerButtons[i].gameObject.SetActive(false);
             }
         }
-    }
-
-    /// <summary>
-    /// Desativa a interatividade de todos os botões visíveis.
-    /// </summary>
-    public void SetAllButtonsInteractable(bool isInteractable, int answerCount)
-    {
-        for(int i = 0; i < answerCount; i++)
+        
+        // [NOVO] Garante que o botão de menu também seja ativado/habilitado
+        if (menuButton != null)
         {
-            if (answerButtons[i] != null) 
-                answerButtons[i].interactable = isInteractable;
+            menuButton.gameObject.SetActive(true);
+            menuButton.interactable = true;
         }
     }
 
     /// <summary>
-    /// Aplica cor de feedback a um botão específico.
+    /// Desativa a interatividade de todos os botões visíveis (respostas E menu).
+    /// [MODIFICADO]
+    /// </summary>
+    public void SetAllButtonsInteractable(bool isInteractable, int answerCount)
+    {
+        // Desativa/Ativa botões de resposta
+        for(int i = 0; i < answerCount; i++)
+        {
+            if (i < answerButtons.Count && answerButtons[i] != null) 
+                answerButtons[i].interactable = isInteractable;
+        }
+        
+        // [NOVO] Desativa/Ativa botão de menu
+        if (menuButton != null)
+            menuButton.interactable = isInteractable;
+    }
+
+    /// <summary>
+    /// Aplica cor de feedback a um botão de RESPOSTA específico.
+    /// (Este método não precisa mudar, pois o botão de menu não recebe feedback)
     /// </summary>
     public void SetButtonFeedback(int buttonIndex, Color color)
     {
@@ -121,19 +155,28 @@ public class TourUIManager : MonoBehaviour
 
     /// <summary>
     /// Reseta todos os botões para o estado padrão (para nova tentativa).
+    /// [MODIFICADO]
     /// </summary>
     public void ResetButtonsToNormal(int answerCount)
     {
+        // Reseta botões de resposta
         for (int i = 0; i < answerCount; i++)
         {
-             if(answerButtons[i].gameObject.activeInHierarchy) {
+             if(i < answerButtons.Count && answerButtons[i].gameObject.activeInHierarchy) {
                 answerButtons[i].GetComponent<Image>().color = normalColor;
                 answerButtons[i].interactable = true;
              }
         }
+        
+        // [NOVO] Reseta (habilita) botão de menu
+        if (menuButton != null)
+        {
+            menuButton.interactable = true;
+        }
     }
 
     // --- CORROTINAS DE FADE (COM LÓGICA OPCIONAL) ---
+    // (Não precisam de modificação)
 
     public IEnumerator FadeOut(float fadeDuration)
     {
