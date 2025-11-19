@@ -2,24 +2,20 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using System.Collections.Generic;
-// [IMPORTANTE] Adiciona a namespace do XR Interaction Toolkit
 using UnityEngine.XR.Interaction.Toolkit; 
 
 /// <summary>
 /// RESPONSABILIDADE: Orquestrar o fluxo do tour.
 /// Gerencia o estado (local/desafio atual), a lógica do quiz (CheckAnswer),
 /// o áudio e as transições de cena.
-/// Dá ordens ao TourDataManager e ao TourUIManager.
 /// </summary>
 [RequireComponent(typeof(AudioSource))]
-[RequireComponent(typeof(TourDataManager))] // Garante que os scripts existam
-[RequireComponent(typeof(TourUIManager))]   // no mesmo objeto
+[RequireComponent(typeof(TourDataManager))]
+[RequireComponent(typeof(TourUIManager))] 
 public class TourManager : MonoBehaviour
 {
-    [Header("Componentes (Arraste)")]
-    [Tooltip("O script que gerencia o carregamento dos dados.")]
+    [Header("Componentes (Arraste ou Auto-detecta)")]
     [SerializeField] private TourDataManager dataManager;
-    [Tooltip("O script que gerencia os elementos visuais (UI).")]
     [SerializeField] private TourUIManager uiManager;
     
     [Header("Referências da Cena")]
@@ -27,58 +23,53 @@ public class TourManager : MonoBehaviour
     public Renderer panoramaSphereRenderer;
     
     [Header("Configurações de Cena")]
-    [Tooltip("O nome exato da sua cena do Lobby (ex: 'LobbyScene').")]
     public string lobbySceneName = "LobbyScene";
     
     [Header("Configurações de Feedback")]
-    [Tooltip("Tempo (em segundos) que o feedback de cor permanece na tela.")]
+    [Tooltip("Tempo (em segundos) que o feedback de cor permanece no botão.")]
     public float feedbackDelay = 1.5f;
 
-    [Header("Configurações de Transição de Local")]
-    [Tooltip("Som a ser tocado ao completar todos os desafios de um local.")]
-    public AudioClip locationVictorySound;
-    [Tooltip("Tempo (em segundos) que a tela permanece preta durante a transição.")]
-    public float waitOnBlackScreenDelay = 1.0f;
-    [Tooltip("Duração (em segundos) do efeito de fade in/out.")]
-    public float fadeDuration = 0.8f;
+    [Header("Configurações de Transição (Fades)")]
+    [Tooltip("Fade RÁPIDO entre perguntas do mesmo local.")]
+    public float questionFadeDuration = 0.5f; 
+    
+    [Tooltip("Fade LENTO e dramático ao trocar de MAPA.")]
+    public float mapTransitionFadeDuration = 2.0f;
 
-    [Header("Configurações de Áudio")]
-    [Tooltip("Volume da música de fundo (0 a 1).")]
+    [Tooltip("Tempo extra na tela preta entre mapas (para ler o texto 'Próxima Parada').")]
+    public float waitOnBlackScreenDelay = 3.0f;
+
+    [Header("Áudio")]
+    [Tooltip("Som ao completar um local.")]
+    public AudioClip locationVictorySound;
     [Range(0f, 1f)] public float backgroundMusicVolume = 0.5f;
-    [Tooltip("Volume dos efeitos sonoros (0 a 1).")]
     [Range(0f, 1f)] public float sfxVolume = 1.0f;
-    [Tooltip("Som de resposta correta.")]
     public AudioClip correctAnswerSound;
-    [Tooltip("Som de resposta incorreta.")]
     public AudioClip incorrectAnswerSound;
     
-    // --- Variáveis Privadas de Controle ---
+    // --- Variáveis Privadas ---
     private List<DadosLocal> locais = new List<DadosLocal>();
     private int currentLocalIndex = 0;
     private int currentDesafioIndex = 0;
-    private bool isAnswering = false; // Trava para evitar cliques múltiplos
+    private bool isAnswering = false; // Trava de cliques
     private AudioSource audioSource;
-    private Desafio desafioAtual; // Referência rápida ao desafio atual
+    private Desafio desafioAtual; 
 
-    /// <summary>
-    /// Chamado quando o script é inicializado.
-    /// </summary>
     void Start()
     {
         audioSource = GetComponent<AudioSource>();
 
-        // Tenta auto-encontrar os componentes se não forem arrastados
+        // Auto-detecta componentes se esquecer de arrastar
         if (dataManager == null) dataManager = GetComponent<TourDataManager>();
         if (uiManager == null) uiManager = GetComponent<TourUIManager>();
 
-        // [PASSO 1] Inscreve-se nos eventos do UIManager.
+        // Inscreve nos eventos da UI
         uiManager.OnAnswerButtonClicked += CheckAnswer;
         uiManager.OnMenuButtonClicked += HandleMenuButtonClick;
 
-        // [PASSO 2] Desativa o movimento do jogador.
         DisablePlayerMovement();
         
-        // [PASSO 3] Verifica se viemos do Lobby
+        // Verifica se veio do Lobby via Singleton
         GameSettings settings = GameSettings.Instance;
         if (settings != null)
         {
@@ -88,81 +79,52 @@ public class TourManager : MonoBehaviour
         else
         {
             currentLocalIndex = 0;
-            Debug.LogWarning("GameSettings não encontrado. Iniciando do local padrão (Índice 0).");
         }
 
-        // [PASSO 4] Inicia a "Master Coroutine"
         StartCoroutine(InitializeTour());
     }
 
-    /// <summary>
-    /// Encontra e desativa componentes de movimento (como Continuous Move ou Teleport)
-    /// no XR Origin para garantir que a experiência seja estacionária.
-    /// </summary>
     void DisablePlayerMovement()
     {
         var moveProvider = FindObjectOfType<UnityEngine.XR.Interaction.Toolkit.ContinuousMoveProviderBase>();
-        if (moveProvider != null)
-        {
-            moveProvider.enabled = false;
-            Debug.Log("ContinuousMoveProviderBase desativado para a cena do Tour.");
-        }
-        else
-        {
-            Debug.LogWarning("Nenhum 'ContinuousMoveProviderBase' encontrado para desativar.");
-        }
+        if (moveProvider != null) moveProvider.enabled = false;
 
         var teleportProvider = FindObjectOfType<UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationProvider>();
-        if (teleportProvider != null)
-        {
-            teleportProvider.enabled = false;
-            Debug.Log("TeleportationProvider desativado para a cena do Tour.");
-        }
-        else
-        {
-            Debug.LogWarning("Nenhum 'TeleportationProvider' encontrado para desativar.");
-        }
+        if (teleportProvider != null) teleportProvider.enabled = false;
     }
 
-    /// <summary>
-    /// Orquestra a inicialização: primeiro carrega os dados
-    /// e depois inicia a transição do primeiro local.
-    /// </summary>
+    // --- INICIALIZAÇÃO ---
+
     private IEnumerator InitializeTour()
     {
-        // 1. Espera o DataManager terminar de carregar tudo.
+        // 1. Espera carregar o JSON e Assets
         yield return StartCoroutine(dataManager.LoadTourDataFromJSONAsync());
-        
-        // Pega uma referência local à lista de locais carregados
         locais = dataManager.Locais;
         
-        // 2. Agora que tudo está na memória, inicia o primeiro tour.
+        // 2. Inicia o primeiro tour
         if (locais.Count > 0)
         {
-            // O 'true' (isFirstLoad) garante que ele faça o Fade-IN inicial
-            StartCoroutine(TransitionToLocal(currentLocalIndex, true));
+            // Carrega os dados sem fade out (já estamos carregando)
+            CarregarDadosDoLocal(currentLocalIndex);
+            // Faz apenas o Fade In inicial (lento para ser suave)
+            yield return StartCoroutine(uiManager.FadeIn(mapTransitionFadeDuration));
         }
         else
         {
-            Debug.LogError("Nenhum local foi carregado do JSON. Verifique o arquivo.");
-            // Se falhar, pelo menos remove a tela preta
-            yield return StartCoroutine(uiManager.FadeIn(fadeDuration)); 
+            Debug.LogError("Nenhum local carregado. Verifique o JSON.");
         }
     }
 
-    /// <summary>
-    /// Configura a cena para o local especificado, incluindo música de fundo.
-    /// </summary>
+    // --- LÓGICA PRINCIPAL ---
+
     void CarregarDadosDoLocal(int localIndex)
     {
-        if(locais.Count == 0 || localIndex >= locais.Count) {
-             Debug.LogError("Tentativa de carregar um local inválido.");
-             return;
-        }
+        if(locais.Count == 0 || localIndex >= locais.Count) return;
+        
         currentLocalIndex = localIndex;
-        currentDesafioIndex = 0; // Reseta para o primeiro desafio
+        currentDesafioIndex = 0; 
 
-        // Toca a música de fundo
+        // Gerencia Música
         if (locais[currentLocalIndex].backgroundMusic != null)
         {
             audioSource.clip = locais[currentLocalIndex].backgroundMusic;
@@ -173,55 +135,35 @@ public class TourManager : MonoBehaviour
             audioSource.Stop();
         }
         
-        // Exibe o primeiro desafio do local.
-        ApresentarDesafio();
+        ApresentarDesafioAtual();
     }
 
-    /// <summary>
-    /// Atualiza a cena com os dados do desafio atual.
-    /// </summary>
-    void ApresentarDesafio()
+    void ApresentarDesafioAtual()
     {
-        if (currentLocalIndex >= locais.Count || 
-            currentDesafioIndex >= locais[currentLocalIndex].desafios.Count)
-        {
-            Debug.LogError($"Índice de desafio inválido! Local: {currentLocalIndex}, Desafio: {currentDesafioIndex}");
-            StartCoroutine(TransitionToLocal(0, false));
-            return;
-        }
+        // Validação de segurança
+        if (currentLocalIndex >= locais.Count || currentDesafioIndex >= locais[currentLocalIndex].desafios.Count) return;
         
-        // Atualiza o estado
         desafioAtual = locais[currentLocalIndex].desafios[currentDesafioIndex];
-
-        if (desafioAtual.panoramaMaterial == null)
-        {
-            Debug.LogError($"Material nulo para o desafio {currentDesafioIndex} do local {locais[currentLocalIndex].locationName}. Verifique o caminho no JSON e se o asset existe em Resources.");
-        }
         
-        // Atualiza os objetos da cena
+        // Atualiza visual (Esfera 360)
         panoramaSphereRenderer.transform.rotation = Quaternion.Euler(0, desafioAtual.initialYRotation, 0);
         panoramaSphereRenderer.material = desafioAtual.panoramaMaterial;
         
-        // Manda o UIManager atualizar a UI
+        // Atualiza UI (Texto e Botões)
         uiManager.ApresentarDesafio(desafioAtual);
         
-        // Libera a trava
+        // Destrava interações
         isAnswering = false;
     }
 
-    /// <summary>
-    /// Chamado pelo evento 'OnAnswerButtonClicked' do UIManager.
-    /// Esta é a LÓGICA do quiz.
-    /// </summary>
+    // --- EVENTOS DA UI ---
+
     public void CheckAnswer(int selectedIndex)
     {
         if (isAnswering) return; 
-        isAnswering = true; // Ativa a trava
-
-        // Manda o UIManager desativar os botões (respostas + menu)
+        isAnswering = true; 
         uiManager.SetAllButtonsInteractable(false, desafioAtual.answers.Count);
 
-        // A lógica de verificação
         if (selectedIndex == desafioAtual.correctAnswerIndex)
         {
             StartCoroutine(HandleCorrectAnswer(selectedIndex));
@@ -232,158 +174,125 @@ public class TourManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// [NOVO MÉTODO]
-    /// Chamado pelo evento 'OnMenuButtonClicked' do UIManager.
-    /// Inicia o processo de retorno ao Lobby.
-    /// </summary>
     public void HandleMenuButtonClick()
     {
-        // Usa a mesma trava de 'CheckAnswer' para evitar cliques duplos
         if (isAnswering) return; 
-        isAnswering = true; // Ativa a trava
-
-        // Manda o UIManager desativar todos os botões (incluindo o de menu)
+        isAnswering = true; 
+        
         int answerCount = (desafioAtual != null) ? desafioAtual.answers.Count : uiManager.answerButtons.Count;
         uiManager.SetAllButtonsInteractable(false, answerCount);
-
-        // Inicia a corrotina para voltar ao Lobby
+        
         StartCoroutine(ReturnToLobby());
     }
     
-    // --- CORROTINAS DE EFEITOS E TRANSIÇÕES ---
+    // --- CORROTINAS DE FLUXO DO JOGO ---
 
-    /// <summary>
-    /// Gerencia a transição completa entre locais.
-    /// </summary>
-    private IEnumerator TransitionToLocal(int localIndex, bool isFirstLoad = false) 
-    {
-        if (!isFirstLoad)
-        {
-            // 1. Escurece a tela
-            yield return StartCoroutine(uiManager.FadeOut(fadeDuration));
-            audioSource.Stop(); // Para a música
-            
-            if (locationVictorySound != null) 
-                audioSource.PlayOneShot(locationVictorySound, sfxVolume);
-                
-            // 2. Pausa na tela preta (só se houver fade)
-            if (uiManager.HasFadeScreen)
-            {
-                yield return new WaitForSeconds(waitOnBlackScreenDelay);
-            }
-        }
-
-        // 3. Carrega os dados do novo local (isso é rápido)
-        CarregarDadosDoLocal(localIndex);
-
-        // 4. Clareia a tela
-        yield return StartCoroutine(uiManager.FadeIn(fadeDuration));
-    }
-
-    /// <summary>
-    /// Lógica para quando o usuário acerta a resposta.
-    /// [MODIFICADO]
-    /// </summary>
     private IEnumerator HandleCorrectAnswer(int correctButtonIndex)
     {
-        // Feedback visual (via UIManager)
+        // 1. Feedback Positivo Visual e Sonoro
         uiManager.SetButtonFeedback(correctButtonIndex, uiManager.correctColor);
-        // Feedback sonoro (via AudioSource local)
         if(correctAnswerSound != null) audioSource.PlayOneShot(correctAnswerSound, sfxVolume); 
         
         yield return new WaitForSeconds(feedbackDelay);
 
-        // Avança para o próximo desafio
+        // 2. Avança o índice
         currentDesafioIndex++;
         
-        // Verifica se completou todos os desafios do local atual.
+        // 3. Decide o próximo passo
         if (currentDesafioIndex >= locais[currentLocalIndex].desafios.Count)
         {
-            // Verifica se este era o último local da lista.
-            if (currentLocalIndex >= locais.Count - 1)
+            // ACABOU O LOCAL ATUAL -> Toca som de vitória
+            audioSource.Stop(); 
+            if (locationVictorySound != null) 
+                audioSource.PlayOneShot(locationVictorySound, sfxVolume);
+
+            int proximoLocalIndex = currentLocalIndex + 1;
+            
+            if (proximoLocalIndex < locais.Count)
             {
-                // SIM, era o último. Retorna ao Lobby.
-                // Esta corrotina JÁ TEM seu próprio fade.
-                yield return StartCoroutine(ReturnToLobby());
+                // Ainda tem mapa: Transição Lenta com Texto
+                yield return StartCoroutine(TransitionToNextMap(proximoLocalIndex));
             }
             else
             {
-                // NÃO, ainda há locais. Vai para o próximo.
-                // Esta corrotina JÁ TEM seu próprio fade.
-                int proximoLocalIndex = currentLocalIndex + 1;
-                yield return StartCoroutine(TransitionToLocal(proximoLocalIndex, false)); 
+                // Acabou tudo: Volta pro Lobby
+                yield return StartCoroutine(ReturnToLobby());
             }
         }
         else
         {
-            // [MODIFICADO] Adicionamos FadeOut/FadeIn entre os desafios
-            
-            // 1. Escurece a tela
-            yield return StartCoroutine(uiManager.FadeOut(fadeDuration));
-
-            // 2. Apresenta o próximo desafio (enquanto a tela está preta)
-            ApresentarDesafio();
-            
-            // 3. Clareia a tela com o novo conteúdo
-            yield return StartCoroutine(uiManager.FadeIn(fadeDuration));
-            
-            // O 'isAnswering = false' já é chamado dentro do ApresentarDesafio()
+            // CONTINUA NO MESMO LOCAL -> Transição Rápida
+            yield return StartCoroutine(TransitionToNextQuestion());
         }
     }
 
-    /// <summary>
-    /// Lógica para quando o usuário erra a resposta.
-    /// [MODIFICADO]
-    /// </summary>
     private IEnumerator HandleIncorrectAnswer(int incorrectButtonIndex)
     {
-        // Feedback visual e sonoro
         uiManager.SetButtonFeedback(incorrectButtonIndex, uiManager.incorrectColor);
         if(incorrectAnswerSound != null) audioSource.PlayOneShot(incorrectAnswerSound, sfxVolume);
         
         yield return new WaitForSeconds(feedbackDelay);
         
-        // [MODIFICADO] Adicionamos FadeOut/FadeIn para o "retry"
-        
-        // 1. Escurece a tela
-        yield return StartCoroutine(uiManager.FadeOut(fadeDuration));
-
-        // 2. Manda o UIManager resetar os botões (enquanto a tela está preta)
+        // Retry com fade rápido
+        yield return StartCoroutine(uiManager.FadeOut(questionFadeDuration));
         uiManager.ResetButtonsToNormal(desafioAtual.answers.Count);
-        
-        // 3. Clareia a tela para a nova tentativa
-        yield return StartCoroutine(uiManager.FadeIn(fadeDuration));
+        yield return StartCoroutine(uiManager.FadeIn(questionFadeDuration));
 
-        // 4. Libera a trava (agora que tudo está visível novamente)
         isAnswering = false;
     }
-    
+
+    // --- CORROTINAS DE TRANSIÇÃO ESPECÍFICAS ---
+
     /// <summary>
-    /// Executa o fade out final e carrega a cena do Lobby.
+    /// Transição RÁPIDA: Apenas escurece, troca o material/pergunta e clareia.
     /// </summary>
+    private IEnumerator TransitionToNextQuestion()
+    {
+        // Fade Out Rápido
+        yield return StartCoroutine(uiManager.FadeOut(questionFadeDuration));
+        
+        // Troca conteúdo
+        ApresentarDesafioAtual();
+        
+        // Fade In Rápido
+        yield return StartCoroutine(uiManager.FadeIn(questionFadeDuration));
+    }
+
+    /// <summary>
+    /// Transição LENTA: Fade Out -> Mostra Texto -> Espera -> Carrega -> Esconde Texto -> Fade In.
+    /// </summary>
+    private IEnumerator TransitionToNextMap(int nextMapIndex)
+    {
+        // 1. Fade Out Lento (Escurece a tela PRIMEIRO)
+        // O texto ainda está escondido aqui.
+        yield return StartCoroutine(uiManager.FadeOut(mapTransitionFadeDuration));
+
+        // 2. Agora que está tudo preto, mostramos o texto explicativo
+        string nomeProximo = locais[nextMapIndex].locationName;
+        uiManager.ShowTransitionText(nomeProximo);
+
+        // 3. Espera na tela preta (lendo a mensagem)
+        yield return new WaitForSeconds(waitOnBlackScreenDelay);
+
+        // 4. Esconde o texto antes de começar a clarear
+        uiManager.HideTransitionText(); 
+        
+        // 5. Carrega os dados (Textura, Música, etc)
+        CarregarDadosDoLocal(nextMapIndex);
+
+        // 6. Fade In Lento (Clareia a tela revelando o novo local)
+        yield return StartCoroutine(uiManager.FadeIn(mapTransitionFadeDuration));
+    }
+    
     private IEnumerator ReturnToLobby()
     {
-        // 1. Escurece a tela
-        yield return StartCoroutine(uiManager.FadeOut(fadeDuration));
+        yield return StartCoroutine(uiManager.FadeOut(mapTransitionFadeDuration));
         audioSource.Stop();
         
-        if (locationVictorySound != null) 
-            audioSource.PlayOneShot(locationVictorySound, sfxVolume);
-            
-        // 2. Espera na tela preta (só se houver fade)
         if (uiManager.HasFadeScreen)
-        {
-            yield return new WaitForSeconds(waitOnBlackScreenDelay);
-        }
+            yield return new WaitForSeconds(1.0f);
 
-        // 3. Carrega a cena do Lobby
-        if (string.IsNullOrEmpty(lobbySceneName))
-        {
-            Debug.LogError("O 'lobbySceneName' não foi definido no TourManager!");
-            yield break;
-        }
-        
-        SceneManager.LoadScene(lobbySceneName);
+        if (!string.IsNullOrEmpty(lobbySceneName))
+            SceneManager.LoadScene(lobbySceneName);
     }
 }

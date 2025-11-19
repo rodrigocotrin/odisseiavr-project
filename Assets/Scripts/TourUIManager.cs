@@ -6,24 +6,26 @@ using TMPro;
 
 /// <summary>
 /// RESPONSABILIDADE: Controlar todos os elementos visuais (UI) da cena do Tour.
-/// (Textos, Botões, Cores de Feedback, Tela de Fade).
+/// (Textos, Botões, Cores de Feedback, Tela de Fade, Texto de Transição).
 /// Não sabe a lógica do jogo, apenas exibe o que o TourManager manda.
 /// </summary>
 public class TourUIManager : MonoBehaviour
 {
-    [Header("Referências da UI")]
+    [Header("Referências da UI - Quiz")]
     [Tooltip("O componente de texto para exibir a pergunta do quiz.")]
     public TextMeshProUGUI questionTextUI;
     [Tooltip("A lista de botões que servirão como opções de resposta.")]
     public List<Button> answerButtons;
     
-    // [NOVO] Referência para o botão de Menu
+    [Header("Referências da UI - Navegação")]
     [Tooltip("Botão para retornar ao Lobby (Menu).")]
-    public Button menuButton; 
-    
-    // --- LÓGICA DE FADE OPCIONAL ---
-    [Tooltip("Uma imagem preta (Image UI) para o fade. (OPCIONAL)")]
+    public Button menuButton;
+
+    [Header("Referências da UI - Transição")]
+    [Tooltip("Uma imagem preta (Image UI) para o fade.")]
     public Image fadeScreen;
+    [Tooltip("Texto que aparece SOBRE a tela preta indicando o próximo local.")]
+    public TextMeshProUGUI transitionTextUI; 
 
     [Header("Configurações de Feedback Visual")]
     [Tooltip("Cor que o botão de resposta assume ao acertar.")]
@@ -33,10 +35,8 @@ public class TourUIManager : MonoBehaviour
     [Tooltip("Cor padrão dos botões de resposta.")]
     public Color normalColor = Color.white;
 
-    // Evento para notificar o TourManager quando um botão de RESPOSTA for clicado
+    // Eventos
     public event System.Action<int> OnAnswerButtonClicked;
-    
-    // [NOVO] Evento para notificar o TourManager quando o botão de MENU for clicado
     public event System.Action OnMenuButtonClicked;
 
     // Propriedade pública para o TourManager saber se pode pausar no fade
@@ -44,61 +44,51 @@ public class TourUIManager : MonoBehaviour
 
     void Start()
     {
-        // --- LÓGICA DE FADE OPCIONAL ---
+        // Configuração Inicial do Fade Screen
         if (fadeScreen == null)
         {
-            Debug.LogWarning("A 'Fade Screen' (Image) não foi atribuída no TourUIManager. O efeito de fade será desativado.");
+            Debug.LogWarning("A 'Fade Screen' (Image) não foi atribuída no TourUIManager.");
         }
         else
         {
-            // Garante que a tela comece PRETA.
+            // Garante que a tela comece PRETA e ATIVA
             Color tempColor = fadeScreen.color;
-            tempColor.a = 1.0f; // Começa 100% opaco (preto)
+            tempColor.a = 1.0f; 
             fadeScreen.color = tempColor;
-            fadeScreen.gameObject.SetActive(true); // Começa ATIVADO para cobrir o carregamento
+            fadeScreen.gameObject.SetActive(true);
         }
-        // --- FIM DA LÓGICA ---
 
-        // Configura os listeners dos botões
+        // Garante que o texto de transição comece invisível
+        if (transitionTextUI != null)
+        {
+            transitionTextUI.gameObject.SetActive(false);
+            transitionTextUI.text = "";
+        }
+
         InitializeButtonListeners();
     }
 
-    /// <summary>
-    /// Adiciona os listeners aos botões de resposta e ao botão de menu.
-    /// [MODIFICADO]
-    /// </summary>
     private void InitializeButtonListeners()
     {
-        // Listeners dos botões de resposta
         for (int i = 0; i < answerButtons.Count; i++)
         {
-            int index = i; // "Captura" o índice para o delegate (lambda)
+            int index = i;
             if (answerButtons[i] != null)
             {
                 answerButtons[i].onClick.AddListener(() => OnAnswerButtonClicked?.Invoke(index));
             }
         }
         
-        // [NOVO] Listener do botão de menu
         if (menuButton != null)
         {
             menuButton.onClick.AddListener(() => OnMenuButtonClicked?.Invoke());
         }
-        else
-        {
-            Debug.LogWarning("O 'menuButton' não foi atribuído no TourUIManager.");
-        }
     }
 
-    /// <summary>
-    /// Atualiza a UI do quiz com os dados de um novo desafio.
-    /// [MODIFICADO]
-    /// </summary>
     public void ApresentarDesafio(Desafio desafio)
     {
         questionTextUI.text = desafio.questionText;
 
-        // Atualiza os botões de resposta
         for (int i = 0; i < answerButtons.Count; i++)
         {
             if (i < desafio.answers.Count)
@@ -117,7 +107,6 @@ public class TourUIManager : MonoBehaviour
             }
         }
         
-        // [NOVO] Garante que o botão de menu também seja ativado/habilitado
         if (menuButton != null)
         {
             menuButton.gameObject.SetActive(true);
@@ -125,41 +114,26 @@ public class TourUIManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Desativa a interatividade de todos os botões visíveis (respostas E menu).
-    /// [MODIFICADO]
-    /// </summary>
     public void SetAllButtonsInteractable(bool isInteractable, int answerCount)
     {
-        // Desativa/Ativa botões de resposta
         for(int i = 0; i < answerCount; i++)
         {
             if (i < answerButtons.Count && answerButtons[i] != null) 
                 answerButtons[i].interactable = isInteractable;
         }
         
-        // [NOVO] Desativa/Ativa botão de menu
         if (menuButton != null)
             menuButton.interactable = isInteractable;
     }
 
-    /// <summary>
-    /// Aplica cor de feedback a um botão de RESPOSTA específico.
-    /// (Este método não precisa mudar, pois o botão de menu não recebe feedback)
-    /// </summary>
     public void SetButtonFeedback(int buttonIndex, Color color)
     {
         if (buttonIndex < 0 || buttonIndex >= answerButtons.Count) return;
         answerButtons[buttonIndex].GetComponent<Image>().color = color;
     }
 
-    /// <summary>
-    /// Reseta todos os botões para o estado padrão (para nova tentativa).
-    /// [MODIFICADO]
-    /// </summary>
     public void ResetButtonsToNormal(int answerCount)
     {
-        // Reseta botões de resposta
         for (int i = 0; i < answerCount; i++)
         {
              if(i < answerButtons.Count && answerButtons[i].gameObject.activeInHierarchy) {
@@ -168,21 +142,44 @@ public class TourUIManager : MonoBehaviour
              }
         }
         
-        // [NOVO] Reseta (habilita) botão de menu
         if (menuButton != null)
-        {
             menuButton.interactable = true;
+    }
+
+    // --- MÉTODOS DE TEXTO DE TRANSIÇÃO ---
+
+    /// <summary>
+    /// Exibe o texto indicando o próximo local. 
+    /// </summary>
+    public void ShowTransitionText(string nextLocationName)
+    {
+        if (transitionTextUI != null)
+        {
+            // AQUI ESTÁ A MUDANÇA DA FRASE
+            transitionTextUI.text = $"Você agora está sendo transportado para:\n\n<size=140%><color=#FFD700>{nextLocationName}</color></size>";
+            transitionTextUI.gameObject.SetActive(true);
         }
     }
 
-    // --- CORROTINAS DE FADE (COM LÓGICA OPCIONAL) ---
-    // (Não precisam de modificação)
+    /// <summary>
+    /// Esconde o texto de transição.
+    /// Deve ser chamado antes do Fade In começar.
+    /// </summary>
+    public void HideTransitionText()
+    {
+        if (transitionTextUI != null)
+        {
+            transitionTextUI.gameObject.SetActive(false);
+        }
+    }
+
+    // --- CORROTINAS DE FADE ---
 
     public IEnumerator FadeOut(float fadeDuration)
     {
-        if (fadeScreen == null) yield break; // Pula se não houver tela de fade
+        if (fadeScreen == null) yield break;
 
-        Color currentColor = Color.black;
+        Color currentColor = Color.black; // Baseado em preto
         float startAlpha = fadeScreen.gameObject.activeInHierarchy ? fadeScreen.color.a : 0f;
         float targetAlpha = 1f;
         float timer = 0f;
@@ -203,7 +200,7 @@ public class TourUIManager : MonoBehaviour
 
     public IEnumerator FadeIn(float fadeDuration)
     {
-        if (fadeScreen == null) yield break; // Pula se não houver tela de fade
+        if (fadeScreen == null) yield break;
 
         Color currentColor = Color.black;
         float startAlpha = 1f;
